@@ -80,37 +80,7 @@ jobs:
         echo "=== Building solution ==="
         msbuild OpenCoverTest.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full /verbosity:minimal
         
-        echo "=== Post-build: Checking actual output paths ==="
-        
-        echo "--- OpenCoverTest project outputs ---"
-        if (Test-Path "OpenCoverTest/bin") {
-          Get-ChildItem "OpenCoverTest/bin" -Recurse -Include "*.exe","*.dll","*.pdb" | ForEach-Object { 
-            Write-Host "MAIN: $($_.FullName.Replace($PWD.Path + '\', ''))" 
-          }
-        }
-        
-        echo "--- OpenCoverTest.Tests project outputs ---"
-        if (Test-Path "OpenCoverTest.Tests/bin") {
-          Get-ChildItem "OpenCoverTest.Tests/bin" -Recurse -Include "*.exe","*.dll","*.pdb" | ForEach-Object { 
-            Write-Host "TEST: $($_.FullName.Replace($PWD.Path + '\', ''))" 
-          }
-        }
-        
-        echo "=== Verifying expected paths ==="
-        $expectedPaths = @(
-          "OpenCoverTest/bin/x64/Debug/OpenCoverTest.exe",
-          "OpenCoverTest/bin/Debug/OpenCoverTest.exe", 
-          "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests/bin/Debug/OpenCoverTest.Tests.dll"
-        )
-        
-        foreach ($path in $expectedPaths) {
-          if (Test-Path $path) {
-            Write-Host "✅ EXISTS: $path"
-          } else {
-            Write-Host "❌ MISSING: $path"
-          }
-        }
+
       shell: powershell
 
     - name: Run tests with coverage (.NET Framework)
@@ -121,7 +91,7 @@ jobs:
         $opencover = "tools/OpenCover.4.7.922/tools/OpenCover.Console.exe"
         $xunit = "tools/xunit.runner.console.2.4.1/tools/net472/xunit.console.exe"
         
-        Write-Host "=== Finding actual test assembly location ==="
+        Write-Host "=== Finding test assembly location ==="
         
         # 가능한 테스트 어셈블리 경로들을 우선순위 순으로 검색
         $possibleTestPaths = @(
@@ -153,10 +123,8 @@ jobs:
         }
         
         Write-Host "=== Checking test directory contents ==="
-        Write-Host "Test directory: $testDir"
-        Get-ChildItem $testDir | ForEach-Object { 
-          $type = if ($_.Extension -eq ".exe") { "EXE" } elseif ($_.Extension -eq ".dll") { "DLL" } elseif ($_.Extension -eq ".pdb") { "PDB" } else { "OTHER" }
-          Write-Host "  $type`: $($_.Name)" 
+        Get-ChildItem $testDir -Filter "*.dll" | ForEach-Object { 
+          Write-Host "DLL: $($_.Name)" 
         }
         
         # 테스트 디렉토리로 이동
@@ -169,11 +137,7 @@ jobs:
         $opencoverPath = (Resolve-Path "$relativePath$opencover").Path
         $xunitPath = (Resolve-Path "$relativePath$xunit").Path
         
-        Write-Host "=== Executing OpenCover from test directory ==="
-        Write-Host "Working directory: $(Get-Location)"
-        Write-Host "OpenCover path: $opencoverPath"
-        Write-Host "XUnit path: $xunitPath"
-        Write-Host "Test assembly: $(Split-Path $testAssembly -Leaf)"
+        Write-Host "=== Running OpenCover ==="
         
         # OpenCover 실행 (현재 디렉토리에서)
         $testDllName = Split-Path $testAssembly -Leaf
@@ -184,7 +148,7 @@ jobs:
           -targetargs:"$testDllName" `
           -output:"coverage.xml" `
           -register:user `
-          -filter:"+[*OpenCoverTest*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
+          -filter:"+[*]* -[*.Tests]* -[*OpenCoverTest]OpenCoverTest.exe -[xunit*]* -[Microsoft*]* -[System*]*" `
           -searchdirs:"." `
           -mergebyhash `
           -showunvisited
