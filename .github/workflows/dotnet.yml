@@ -177,10 +177,11 @@ jobs:
         
         # OpenCover 실행 (현재 디렉토리에서)
         $testDllName = Split-Path $testAssembly -Leaf
+        Write-Host "Test dll name: $testDllName"
         
         & $opencoverPath `
           -target:"$xunitPath" `
-          -targetargs:"$testDllName -noshadow -xml testresults.xml" `
+          -targetargs:"$testDllName" `
           -output:"coverage.xml" `
           -register:user `
           -filter:"+[*OpenCoverTest*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
