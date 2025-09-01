@@ -105,9 +105,9 @@
     <Analyzer Include="..\packages\xunit.analyzers.1.18.0\analyzers\dotnet\cs\xunit.analyzers.fixes.dll" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\OpenCoverTest.App\OpenCoverTest.App.csproj">
+    <ProjectReference Include="..\OpenCoverTest.App\OpenCoverTest.csproj">
       <Project>{e4862578-7159-4d1e-a742-4a4b18b21daa}</Project>
-      <Name>OpenCoverTest.App</Name>
+      <Name>OpenCoverTest</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
