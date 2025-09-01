@@ -20,6 +20,7 @@ namespace OpenCoverTest.Tests
 
     public class CalculatorTests
     {
+
         [Fact]
         public void Add_ReturnsSum()
         {
