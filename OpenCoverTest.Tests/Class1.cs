@@ -16,7 +16,7 @@ namespace OpenCoverTest.Tests
             Assert.True(true);
         }
     }
-
+     
 
     public class CalculatorTests
     {
