@@ -54,3 +54,7 @@ namespace OpenCoverTest.Tests
         }
     }
 }
+
+// OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"OpenCoverTest.Tests.dll" -output:"coverage.xml" -register:user
+// ReportGenerator.exe -reports:coverage.xml -targetdir:CoverageReport
+// Install-Package Microsoft.Bcl.AsyncInterfaces -Version 5.0.0

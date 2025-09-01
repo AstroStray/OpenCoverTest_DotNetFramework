@@ -21,6 +21,7 @@ namespace OpenCoverTest.App
         public int Subtract(int a, int b) => a - b;
     }
 
+
     public class StringHelper
     {
         public string Reverse(string input)
