@@ -183,7 +183,7 @@ jobs:
           -targetargs:"$testDllName -noshadow -xml testresults.xml" `
           -output:"coverage.xml" `
           -register:user `
-          -filter:"+[*]* -[*Test*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
+          -filter:"+[*OpenCoverTest*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
           -searchdirs:"." `
           -mergebyhash `
           -showunvisited
