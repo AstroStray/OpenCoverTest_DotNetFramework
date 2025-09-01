@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using OpenCoverTest.Core;
 using Xunit;
-using OpenCoverTest.App;
 
 namespace OpenCoverTest.Tests
 {
