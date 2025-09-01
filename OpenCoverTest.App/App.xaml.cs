@@ -22,6 +22,7 @@ namespace OpenCoverTest.App
     }
 
 
+
     public class StringHelper
     {
         public string Reverse(string input)
