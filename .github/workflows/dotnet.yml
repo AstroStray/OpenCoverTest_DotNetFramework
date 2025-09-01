@@ -68,7 +68,6 @@ jobs:
         nuget install xunit.runner.console -Version 2.4.1 -OutputDirectory tools
         nuget install xunit.runner.reporters -Version 2.4.1 -OutputDirectory tools
         nuget install OpenCover -Version 4.7.922 -OutputDirectory tools
-        nuget install Coverlet.Console -Version 6.0.0 -OutputDirectory tools
         nuget install ReportGenerator -Version 5.1.9 -OutputDirectory tools
 
     - name: Restore packages (.NET Framework)
@@ -77,35 +76,111 @@ jobs:
 
     - name: Build (.NET Framework)
       if: needs.check-project.outputs.is_framework == 'true'
-      run: msbuild OpenCoverTest.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full
+      run: |
+        echo "=== Building solution ==="
+        msbuild OpenCoverTest.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full /verbosity:minimal
+        
+        echo "=== Post-build: Checking actual output paths ==="
+        
+        echo "--- OpenCoverTest project outputs ---"
+        if (Test-Path "OpenCoverTest/bin") {
+          Get-ChildItem "OpenCoverTest/bin" -Recurse -Include "*.exe","*.dll","*.pdb" | ForEach-Object { 
+            Write-Host "MAIN: $($_.FullName.Replace($PWD.Path + '\', ''))" 
+          }
+        }
+        
+        echo "--- OpenCoverTest.Tests project outputs ---"
+        if (Test-Path "OpenCoverTest.Tests/bin") {
+          Get-ChildItem "OpenCoverTest.Tests/bin" -Recurse -Include "*.exe","*.dll","*.pdb" | ForEach-Object { 
+            Write-Host "TEST: $($_.FullName.Replace($PWD.Path + '\', ''))" 
+          }
+        }
+        
+        echo "=== Verifying expected paths ==="
+        $expectedPaths = @(
+          "OpenCoverTest/bin/x64/Debug/OpenCoverTest.exe",
+          "OpenCoverTest/bin/Debug/OpenCoverTest.exe", 
+          "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests/bin/Debug/OpenCoverTest.Tests.dll"
+        )
+        
+        foreach ($path in $expectedPaths) {
+          if (Test-Path $path) {
+            Write-Host "✅ EXISTS: $path"
+          } else {
+            Write-Host "❌ MISSING: $path"
+          }
+        }
+      shell: powershell
 
     - name: Run tests with coverage (.NET Framework)
       if: needs.check-project.outputs.is_framework == 'true'
       shell: powershell
       run: |
-        # Tool paths explicitly specified for stability
+        # Tool paths
         $opencover = "tools/OpenCover.4.7.922/tools/OpenCover.Console.exe"
         $xunit = "tools/xunit.runner.console.2.4.1/tools/net472/xunit.console.exe"
-        $testAssembly = "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll"
-        $testDir = "OpenCoverTest.Tests/bin/x64/Debug"
         
-        # Debug: 파일들이 존재하는지 확인
-        Write-Host "=== Checking files ==="
-        Write-Host "Test assembly exists: $(Test-Path $testAssembly)"
-        Get-ChildItem $testDir -Filter "*.exe" | ForEach-Object { Write-Host "EXE: $($_.Name)" }
-        Get-ChildItem $testDir -Filter "*.pdb" | ForEach-Object { Write-Host "PDB: $($_.Name)" }
+        Write-Host "=== Finding actual test assembly location ==="
+        
+        # 가능한 테스트 어셈블리 경로들을 우선순위 순으로 검색
+        $possibleTestPaths = @(
+          "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests/bin/Debug/OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests/bin/x64/Release/OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests/bin/Release/OpenCoverTest.Tests.dll"
+        )
+        
+        $testAssembly = $null
+        $testDir = $null
+        
+        foreach ($path in $possibleTestPaths) {
+          if (Test-Path $path) {
+            $testAssembly = $path
+            $testDir = Split-Path $path -Parent
+            Write-Host "✅ Found test assembly: $testAssembly"
+            break
+          }
+        }
+        
+        if (-not $testAssembly) {
+          Write-Error "❌ Could not find test assembly in any expected location!"
+          Write-Host "Available files in OpenCoverTest.Tests/bin/:"
+          if (Test-Path "OpenCoverTest.Tests/bin") {
+            Get-ChildItem "OpenCoverTest.Tests/bin" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+          }
+          exit 1
+        }
+        
+        Write-Host "=== Checking test directory contents ==="
+        Write-Host "Test directory: $testDir"
+        Get-ChildItem $testDir | ForEach-Object { 
+          $type = if ($_.Extension -eq ".exe") { "EXE" } elseif ($_.Extension -eq ".dll") { "DLL" } elseif ($_.Extension -eq ".pdb") { "PDB" } else { "OTHER" }
+          Write-Host "  $type`: $($_.Name)" 
+        }
         
         # 테스트 디렉토리로 이동
         Push-Location $testDir
         
-        # 절대 경로로 도구 실행
-        $opencoverPath = (Resolve-Path "../../../../$opencover").Path
-        $xunitPath = (Resolve-Path "../../../../$xunit").Path
+        # 상대 경로로 도구 위치 계산
+        $levels = ($testDir -split '[/\\]').Count
+        $relativePath = "../" * $levels
         
-        Write-Host "=== Attempting coverage with broad filter ==="
+        $opencoverPath = (Resolve-Path "$relativePath$opencover").Path
+        $xunitPath = (Resolve-Path "$relativePath$xunit").Path
+        
+        Write-Host "=== Executing OpenCover from test directory ==="
+        Write-Host "Working directory: $(Get-Location)"
+        Write-Host "OpenCover path: $opencoverPath"
+        Write-Host "XUnit path: $xunitPath"
+        Write-Host "Test assembly: $(Split-Path $testAssembly -Leaf)"
+        
+        # OpenCover 실행 (현재 디렉토리에서)
+        $testDllName = Split-Path $testAssembly -Leaf
+        
         & $opencoverPath `
           -target:"$xunitPath" `
-          -targetargs:"OpenCoverTest.Tests.dll -noshadow" `
+          -targetargs:"$testDllName -noshadow -xml testresults.xml" `
           -output:"coverage.xml" `
           -register:user `
           -filter:"+[*]* -[*Test*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
@@ -116,46 +191,34 @@ jobs:
         # 원래 디렉토리로 돌아가기
         Pop-Location
         
-        # coverage.xml 체크
+        # 결과 파일들을 루트로 복사
         $coverageFile = "$testDir/coverage.xml"
+        $testResultFile = "$testDir/testresults.xml"
+        
         if (Test-Path $coverageFile) {
           Copy-Item $coverageFile "coverage.xml"
-          Write-Host "Coverage file copied to root directory"
+          Write-Host "✅ Coverage file copied to root"
           
-          # 더 많은 coverage.xml 내용 보기
-          Write-Host "=== Coverage XML content ==="
-          $coverageContent = Get-Content "coverage.xml"
-          $coverageContent | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
-          
-          # Modules가 비어있는지 확인
+          # Coverage 내용 확인
+          $coverageContent = Get-Content "coverage.xml" -Raw
           if ($coverageContent -match "<Modules />") {
-            Write-Host "=== WARNING: No modules found in coverage! ==="
-            Write-Host "This usually means the tests don't actually execute main application code."
-            Write-Host "Let's try a different approach..."
-            
-            # 대안: 프로세스 모니터링 방식
-            Push-Location $testDir
-            
-            Write-Host "=== Trying with different target approach ==="
-            & $opencoverPath `
-              -target:"OpenCoverTest.exe" `
-              -targetargs:"-test" `
-              -output:"coverage2.xml" `
-              -register:user `
-              -filter:"+[OpenCoverTest]* -[*Test*]*" `
-              -searchdirs:"." `
-              2>&1 | Out-Host
-            
-            Pop-Location
-            
-            if (Test-Path "$testDir/coverage2.xml") {
-              Copy-Item "$testDir/coverage2.xml" "coverage2.xml"
-              Write-Host "=== Alternative coverage attempt completed ==="
-            }
+            Write-Host "⚠️  WARNING: Coverage is empty - no modules instrumented"
+          } else {
+            Write-Host "✅ Coverage data found!"
           }
+          
+          # Coverage 요약 표시
+          Write-Host "=== Coverage XML Summary ==="
+          Get-Content "coverage.xml" -TotalCount 15 | ForEach-Object { Write-Host $_ }
         } else {
-          Write-Error "Coverage.xml file was not generated."
+          Write-Error "❌ Coverage.xml was not generated"
           exit 1
+        }
+        
+        # 테스트 결과도 복사
+        if (Test-Path $testResultFile) {
+          Copy-Item $testResultFile "testresults.xml"
+          Write-Host "✅ Test results copied to root"
         }
 
     - name: Generate coverage report (.NET Framework)
@@ -187,3 +250,13 @@ jobs:
       with:
         name: coverage-report
         path: coverage-report
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          testresults.xml
+          coverage.xml
+        retention-days: 30
