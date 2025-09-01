@@ -164,7 +164,8 @@ jobs:
         }
         
         # Method 3: Manual approach - run tests with detailed output
-        if (-not $openCoverWorked) {
+        if (-not $openCoverWorked)
+        {
           Write-Host "=== Running tests with detailed output for analysis ==="
           Push-Location $testDir
           
@@ -173,25 +174,19 @@ jobs:
           Pop-Location
           
           # Copy test results
-          if (Test-Path "$testDir/testresults.xml") {
+          if (Test-Path "$testDir/testresults.xml")
+          {
             Copy-Item "$testDir/testresults.xml" "testresults.xml"
           }
-          if (Test-Path "$testDir/testresults.html") {
+          if (Test-Path "$testDir/testresults.html")
+          {
             Copy-Item "$testDir/testresults.html" "testresults.html"
           }
-          
-          # Create a dummy coverage file to prevent build failure
-          Write-Host "=== Creating minimal coverage report for debugging ==="
-          @"
-          <?xml version="1.0" encoding="utf-8"?>
-          <CoverageSession>
-            <Summary message="Coverage collection failed - check test structure" />
-          </CoverageSession>
-          "@ | Out-File "coverage.xml" -Encoding UTF8
         }
         
         # Final check
-        if (-not (Test-Path "coverage.xml")) {
+        if (-not (Test-Path "coverage.xml"))
+        {
           Write-Error "No coverage data could be generated."
           exit 1
         }
