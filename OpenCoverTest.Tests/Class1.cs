@@ -17,6 +17,7 @@ namespace OpenCoverTest.Tests
         }
     }
 
+
     public class CalculatorTests
     {
         [Fact]
