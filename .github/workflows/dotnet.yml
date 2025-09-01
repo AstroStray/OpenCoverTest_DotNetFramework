@@ -21,11 +21,11 @@ jobs:
     - name: Check for test files
       id: check
       run: |
-        if (Test-Path "Photogray.Tests/Photogray.Tests.csproj") {
+        if (Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj") {
           echo "has_tests=true" >> $env:GITHUB_OUTPUT
         } else {
           echo "has_tests=false" >> $env:GITHUB_OUTPUT
-          Write-Host "::warning::Test project (Photogray.Tests.csproj) not found."
+          Write-Host "::warning::Test project (OpenCoverTest.Tests.csproj) not found."
         }
       shell: powershell
 
@@ -72,11 +72,11 @@ jobs:
 
     - name: Restore packages (.NET Framework)
       if: needs.check-project.outputs.is_framework == 'true'
-      run: nuget restore Photogray.sln
+      run: nuget restore OpenCoverTest.sln
 
     - name: Build (.NET Framework)
       if: needs.check-project.outputs.is_framework == 'true'
-      run: msbuild Photogray.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full
+      run: msbuild OpenCoverTest.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full
 
     - name: Run tests with coverage (.NET Framework)
       if: needs.check-project.outputs.is_framework == 'true'
@@ -86,8 +86,8 @@ jobs:
         $opencover = "tools/OpenCover.4.7.922/tools/OpenCover.Console.exe"
         $coverlet = "tools/Coverlet.Console.6.0.0/tools/netcoreapp3.0/coverlet.exe"
         $xunit = "tools/xunit.runner.console.2.4.1/tools/net472/xunit.console.exe"
-        $testAssembly = "Photogray.Tests/bin/x64/Debug/Photogray.Tests.dll"
-        $testDir = "Photogray.Tests/bin/x64/Debug"
+        $testAssembly = "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll"
+        $testDir = "OpenCoverTest.Tests/bin/x64/Debug"
         
         # Debug: 파일들이 존재하는지 확인
         Write-Host "=== Checking files ==="
@@ -104,7 +104,7 @@ jobs:
         
         & $opencoverPath `
           -target:"$xunitPath" `
-          -targetargs:"Photogray.Tests.dll -noshadow -xml testresults.xml" `
+          -targetargs:"OpenCoverTest.Tests.dll -noshadow -xml testresults.xml" `
           -output:"coverage.xml" `
           -register:user `
           -filter:"+[*]* -[*Test*]* -[xunit*]* -[Microsoft*]* -[System*]*" `
@@ -141,9 +141,9 @@ jobs:
             
             try {
               & $coverletPath `
-                "Photogray.exe" `
+                "OpenCoverTest.exe" `
                 --target "$xunitPath" `
-                --targetargs "Photogray.Tests.dll -noshadow" `
+                --targetargs "OpenCoverTest.Tests.dll -noshadow" `
                 --format opencover `
                 --output "coverage_coverlet.xml" `
                 --exclude "[*Test*]*" `
@@ -168,7 +168,7 @@ jobs:
           Write-Host "=== Running tests with detailed output for analysis ==="
           Push-Location $testDir
           
-          & $xunitPath "Photogray.Tests.dll" -noshadow -xml testresults.xml -html testresults.html -verbose
+          & $xunitPath "OpenCoverTest.Tests.dll" -noshadow -xml testresults.xml -html testresults.html -verbose
           
           Pop-Location
           
@@ -183,11 +183,11 @@ jobs:
           # Create a dummy coverage file to prevent build failure
           Write-Host "=== Creating minimal coverage report for debugging ==="
           @"
-<?xml version="1.0" encoding="utf-8"?>
-<CoverageSession>
-  <Summary message="Coverage collection failed - check test structure" />
-</CoverageSession>
-"@ | Out-File "coverage.xml" -Encoding UTF8
+          <?xml version="1.0" encoding="utf-8"?>
+          <CoverageSession>
+            <Summary message="Coverage collection failed - check test structure" />
+          </CoverageSession>
+          "@ | Out-File "coverage.xml" -Encoding UTF8
         }
         
         # Final check
