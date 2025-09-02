@@ -20,7 +20,7 @@ jobs:
     - name: Check for test files
       id: check
       run: |
-        $testProject = Test-Path "Photogray.Tests/Photogray.Tests.csproj"
+        $testProject = Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj"
         
         if ($testProject) {
           echo "has_tests=true" >> $env:GITHUB_OUTPUT
@@ -109,8 +109,8 @@ jobs:
         
         # 테스트 DLL 경로 찾기
         $testDll = @(
-          "Photogray.Tests\bin\Debug\Photogray.Tests.dll",
-          "Photogray.Tests\bin\x64\Debug\Photogray.Tests.dll"
+          "OpenCoverTest.Tests\bin\Debug\OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests\bin\x64\Debug\OpenCoverTest.Tests.dll"
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
         
         if (-not $testDll) {
@@ -127,7 +127,7 @@ jobs:
           -targetargs:"$testDll -noshadow" `
           -output:coverage.xml `
           -register:user `
-          -filter:"+[Photogray.*]* -[*Tests*]*"
+          -filter:"+[OpenCoverTest.*]* -[*Tests*]*"
 
     - name: Run tests with coverage (.NET 5+)
       if: needs.check-tests.outputs.is_framework == 'false'
