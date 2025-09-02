@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using OpenCoverTest.Core;
 using Xunit;
-using OpenCoverTest.App;
 
 namespace OpenCoverTest.Tests
 {
@@ -16,9 +11,12 @@ namespace OpenCoverTest.Tests
             Assert.True(true);
         }
     }
+     
+
 
     public class CalculatorTests
     {
+
         [Fact]
         public void Add_ReturnsSum()
         {
@@ -51,3 +49,7 @@ namespace OpenCoverTest.Tests
         }
     }
 }
+
+// OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"OpenCoverTest.Tests.dll" -output:"coverage.xml" -register:user
+// ReportGenerator.exe -reports:coverage.xml -targetdir:CoverageReport
+// Install-Package Microsoft.Bcl.AsyncInterfaces -Version 5.0.0
