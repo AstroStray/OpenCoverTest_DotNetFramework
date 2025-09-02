@@ -20,7 +20,7 @@ jobs:
     - name: Check for test files
       id: check
       run: |
-        $mainProject = Test-Path "OpenCoverTest/OpenCoverTest.csproj"
+        $mainProject = Test-Path "OpenCoverTest.App/OpenCoverTest.csproj"
         $testProject = Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj"
         
         if ($mainProject -and $testProject) {
