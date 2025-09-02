@@ -111,8 +111,7 @@ jobs:
         # 테스트 DLL 경로 찾기
         $testDll = @(
           "OpenCoverTest.Tests\bin\Debug\OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests\bin\Debug\net472\OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests\bin\Debug\net48\OpenCoverTest.Tests.dll"
+          "OpenCoverTest.Tests\bin\x64\Debug\OpenCoverTest.Tests.dll",
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
         
         if (-not $testDll) {
