@@ -418,3 +418,5 @@ FodyWeavers.xsd
 *.msp
 /CoverageReport
 /tools/ReportGenerator
+/tools/xunit.runner
+/coverage.xml
