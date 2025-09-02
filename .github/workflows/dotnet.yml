@@ -1,5 +1,5 @@
-# 브랜치 병합 시 테스트 커버리지를 측정하는 실험적인 Action입니다.
-name: Test Coverage CI for .NET Framework
+# dev 브랜치에 대해서만 테스트 커버리지를 측정하는 실험적인 Action입니다.
+name: Dev PR Test Coverage
 
 on:
   pull_request:
@@ -8,220 +8,149 @@ on:
       - main
 
 jobs:
-  # 1단계: 프로젝트 타입을 확인하고 테스트 존재 여부를 검사하는 작업
-  check-project:
+  check-tests:
     runs-on: windows-latest
     outputs:
       has_tests: ${{ steps.check.outputs.has_tests }}
       is_framework: ${{ steps.detect.outputs.is_framework }}
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
     - name: Check for test files
       id: check
       run: |
-        if (Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj") {
+        $mainProject = Test-Path "OpenCoverTest/OpenCoverTest.csproj"
+        $testProject = Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj"
+        
+        if ($mainProject -and $testProject) {
           echo "has_tests=true" >> $env:GITHUB_OUTPUT
         } else {
           echo "has_tests=false" >> $env:GITHUB_OUTPUT
-          Write-Host "::warning::Test project (OpenCoverTest.Tests.csproj) not found."
         }
       shell: powershell
 
-    - name: Detect .NET Framework
+    - name: Detect project type
       id: detect
       run: |
         if ((Get-ChildItem -Recurse -Filter "*.csproj" | Select-String "<TargetFramework>net47" -Quiet) -or
             (Get-ChildItem -Recurse -Filter "*.csproj" | Select-String "<TargetFrameworkVersion>v4.7" -Quiet) -or
-            (Test-Path -Path "**/packages.config" -PathType Leaf)) {
+            (Get-ChildItem -Recurse -Filter "packages.config" -ErrorAction SilentlyContinue)) {
           echo "is_framework=true" >> $env:GITHUB_OUTPUT
-          Write-Host "Project type detected: .NET Framework"
         } else {
           echo "is_framework=false" >> $env:GITHUB_OUTPUT
-          Write-Host "Project type detected: .NET 5+"
         }
       shell: powershell
 
-  # 2단계: 확인된 프로젝트 타입에 맞춰 빌드 및 커버리지 측정
-  build-and-test:
-    needs: check-project
-    if: needs.check-project.outputs.has_tests == 'true'
+    - name: No tests warning
+      if: steps.check.outputs.has_tests == 'false'
+      run: |
+        Write-Host "::warning::테스트 코드가 존재하지 않습니다."
+      shell: powershell
+
+  test-coverage:
+    needs: check-tests
+    if: needs.check-tests.outputs.has_tests == 'true'
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
+    # .NET Framework 설정
     - name: Setup MSBuild (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
+      if: needs.check-tests.outputs.is_framework == 'true'
       uses: microsoft/setup-msbuild@v1.3
       
     - name: Setup NuGet (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
+      if: needs.check-tests.outputs.is_framework == 'true'
       uses: NuGet/setup-nuget@v1
       
-    - name: Install and Pin Tool Versions (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
+    - name: Install XUnit Console Runner (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
       run: |
-        nuget install xunit.runner.console -Version 2.4.1 -OutputDirectory tools
-        nuget install xunit.runner.reporters -Version 2.4.1 -OutputDirectory tools
-        nuget install OpenCover -Version 4.7.922 -OutputDirectory tools
-        nuget install ReportGenerator -Version 5.1.9 -OutputDirectory tools
+        nuget install xunit.runner.console -OutputDirectory tools
 
-    - name: Restore packages (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
-      run: nuget restore OpenCoverTest.sln
-
-    - name: Build (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
+    - name: Install OpenCover (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
       run: |
-        echo "=== Building solution ==="
-        msbuild OpenCoverTest.sln /p:Configuration=Debug /p:Platform="x64" /p:DebugSymbols=true /p:DebugType=full /verbosity:minimal
-        
+        nuget install OpenCover -OutputDirectory tools
+        nuget install ReportGenerator -OutputDirectory tools
 
-      shell: powershell
-
-    - name: Run tests with coverage (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
-      shell: powershell
-      run: |
-        # Tool paths
-        $opencover = "tools/OpenCover.4.7.922/tools/OpenCover.Console.exe"
-        $xunit = "tools/xunit.runner.console.2.4.1/tools/net472/xunit.console.exe"
-        
-        Write-Host "=== Finding test assembly location ==="
-        
-        # 가능한 테스트 어셈블리 경로들을 우선순위 순으로 검색
-        $possibleTestPaths = @(
-          "OpenCoverTest.Tests/bin/x64/Debug/OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests/bin/Debug/OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests/bin/x64/Release/OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests/bin/Release/OpenCoverTest.Tests.dll"
-        )
-        
-        $testAssembly = $null
-        $testDir = $null
-        
-        foreach ($path in $possibleTestPaths) {
-          if (Test-Path $path) {
-            $testAssembly = $path
-            $testDir = Split-Path $path -Parent
-            Write-Host "✅ Found test assembly: $testAssembly"
-            break
-          }
-        }
-        
-        if (-not $testAssembly) {
-          Write-Error "❌ Could not find test assembly in any expected location!"
-          Write-Host "Available files in OpenCoverTest.Tests/bin/:"
-          if (Test-Path "OpenCoverTest.Tests/bin") {
-            Get-ChildItem "OpenCoverTest.Tests/bin" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-          }
-          exit 1
-        }
-        
-        Write-Host "=== Checking test directory contents ==="
-        Get-ChildItem $testDir -Filter "*.dll" | ForEach-Object { 
-          Write-Host "DLL: $($_.Name)" 
-        }
-        
-        # 테스트 디렉토리로 이동
-        Push-Location $testDir
-        
-        # 상대 경로로 도구 위치 계산
-        $levels = ($testDir -split '[/\\]').Count
-        $relativePath = "../" * $levels
-        
-        $opencoverPath = (Resolve-Path "$relativePath$opencover").Path
-        $xunitPath = (Resolve-Path "$relativePath$xunit").Path
-        
-        Write-Host "=== Running OpenCover ==="
-        
-        # OpenCover 실행 (현재 디렉토리에서)
-        $testDllName = Split-Path $testAssembly -Leaf
-        Write-Host "Test dll name: $testDllName"
-        
-        & $opencoverPath `
-          -target:"$xunitPath" `
-          -targetargs:"$testDllName" `
-          -output:"coverage.xml" `
-          -register:user `
-          -filter:"+[*]* -[*.Tests]* -[*OpenCoverTest]OpenCoverTest.exe -[xunit*]* -[Microsoft*]* -[System*]*" `
-          -searchdirs:"." `
-          -mergebyhash `
-          -showunvisited
-        
-        # 원래 디렉토리로 돌아가기
-        Pop-Location
-        
-        # 결과 파일들을 루트로 복사
-        $coverageFile = "$testDir/coverage.xml"
-        $testResultFile = "$testDir/testresults.xml"
-        
-        if (Test-Path $coverageFile) {
-          Copy-Item $coverageFile "coverage.xml"
-          Write-Host "✅ Coverage file copied to root"
-          
-          # Coverage 내용 확인
-          $coverageContent = Get-Content "coverage.xml" -Raw
-          if ($coverageContent -match "<Modules />") {
-            Write-Host "⚠️  WARNING: Coverage is empty - no modules instrumented"
-          } else {
-            Write-Host "✅ Coverage data found!"
-          }
-          
-          # Coverage 요약 표시
-          Write-Host "=== Coverage XML Summary ==="
-          Get-Content "coverage.xml" -TotalCount 15 | ForEach-Object { Write-Host $_ }
-        } else {
-          Write-Error "❌ Coverage.xml was not generated"
-          exit 1
-        }
-        
-        # 테스트 결과도 복사
-        if (Test-Path $testResultFile) {
-          Copy-Item $testResultFile "testresults.xml"
-          Write-Host "✅ Test results copied to root"
-        }
-
-    - name: Generate coverage report (.NET Framework)
-      if: needs.check-project.outputs.is_framework == 'true'
-      shell: powershell
-      run: |
-        # Tool path explicitly specified for stability
-        $reportgen = "tools/ReportGenerator.5.1.9/tools/net47/ReportGenerator.exe"
-        & $reportgen -reports:coverage.xml -targetdir:coverage-report -reporttypes:Html
-
-    - name: Setup .NET SDK (.NET 5+)
-      if: needs.check-project.outputs.is_framework == 'false'
+    # .NET 5+ 설정
+    - name: Setup .NET SDK
+      if: needs.check-tests.outputs.is_framework == 'false'
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: '9.0.x'  # Migration시 변경 필요
 
-    - name: Restore, Build, and Test with Coverage (.NET 5+)
-      if: needs.check-project.outputs.is_framework == 'false'
-      run: dotnet test --collect:"XPlat Code Coverage"
+    # 의존성 복원
+    - name: Restore packages (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
+      run: nuget restore
+
+    - name: Restore dependencies (.NET 5+)
+      if: needs.check-tests.outputs.is_framework == 'false'
+      run: dotnet restore
+
+    # 빌드
+    - name: Build (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
+      run: msbuild /p:Configuration=Debug /p:Platform=x64
+
+    - name: Build (.NET 5+)
+      if: needs.check-tests.outputs.is_framework == 'false'
+      run: dotnet build --configuration Debug --no-restore
+
+    # 테스트 및 커버리지
+    - name: Run tests with coverage (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
+      run: |
+        $opencover = Get-ChildItem -Recurse -Path "tools" -Filter "OpenCover.Console.exe" | Select-Object -First 1
+        $xunit = Get-ChildItem -Recurse -Path "tools" -Filter "xunit.console.exe" | Select-Object -First 1
+        
+        # 테스트 DLL 경로 찾기
+        $testDll = @(
+          "OpenCoverTest.Tests\bin\Debug\OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests\bin\Debug\net472\OpenCoverTest.Tests.dll",
+          "OpenCoverTest.Tests\bin\Debug\net48\OpenCoverTest.Tests.dll"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        
+        if (-not $testDll) {
+          Write-Error "테스트 DLL을 찾을 수 없습니다."
+          exit 1
+        }
+        
+        Write-Host "테스트 DLL: $testDll"
+        Write-Host "OpenCover: $($opencover.FullName)"
+        Write-Host "XUnit: $($xunit.FullName)"
+        
+        & $opencover.FullName `
+          -target:$xunit.FullName `
+          -targetargs:"$testDll -noshadow" `
+          -output:coverage.xml `
+          -register:user `
+          -filter:"+[OpenCoverTest.*]* -[*Tests*]*"
+
+    - name: Run tests with coverage (.NET 5+)
+      if: needs.check-tests.outputs.is_framework == 'false'
+      run: dotnet test --configuration Debug --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+    # 커버리지 리포트 생성
+    - name: Generate coverage report (.NET Framework)
+      if: needs.check-tests.outputs.is_framework == 'true'
+      run: |
+        $reportgen = Get-ChildItem -Recurse -Filter "ReportGenerator.exe" | Select-Object -First 1
+        & $reportgen.FullName -reports:coverage.xml -targetdir:coverage-report
 
     - name: Generate coverage report (.NET 5+)
-      if: needs.check-project.outputs.is_framework == 'false'
+      if: needs.check-tests.outputs.is_framework == 'false'
       run: |
-        dotnet tool install --global dotnet-reportgenerator-globaltool
-        reportgenerator "-reports:**/coverage.cobertura.xml" "-targetdir:coverage-report" "-reporttypes:Html"
+        dotnet tool install -g dotnet-reportgenerator-globaltool
+        reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
 
+    # 커버리지 리포트 업로드
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
-        path: coverage-report
-        
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: |
-          testresults.xml
-          coverage.xml
-        retention-days: 30
+        path: coverage-report/
