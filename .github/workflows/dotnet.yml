@@ -20,10 +20,9 @@ jobs:
     - name: Check for test files
       id: check
       run: |
-        $mainProject = Test-Path "OpenCoverTest.App/OpenCoverTest.csproj"
-        $testProject = Test-Path "OpenCoverTest.Tests/OpenCoverTest.Tests.csproj"
+        $testProject = Test-Path "Photogray.Tests/Photogray.Tests.csproj"
         
-        if ($mainProject -and $testProject) {
+        if ($testProject) {
           echo "has_tests=true" >> $env:GITHUB_OUTPUT
         } else {
           echo "has_tests=false" >> $env:GITHUB_OUTPUT
@@ -110,8 +109,8 @@ jobs:
         
         # 테스트 DLL 경로 찾기
         $testDll = @(
-          "OpenCoverTest.Tests\bin\Debug\OpenCoverTest.Tests.dll",
-          "OpenCoverTest.Tests\bin\x64\Debug\OpenCoverTest.Tests.dll"
+          "Photogray.Tests\bin\Debug\Photogray.Tests.dll",
+          "Photogray.Tests\bin\x64\Debug\Photogray.Tests.dll"
         ) | Where-Object { Test-Path $_ } | Select-Object -First 1
         
         if (-not $testDll) {
@@ -128,7 +127,7 @@ jobs:
           -targetargs:"$testDll -noshadow" `
           -output:coverage.xml `
           -register:user `
-          -filter:"+[OpenCoverTest.*]* -[*Tests*]*"
+          -filter:"+[Photogray.*]* -[*Tests*]*"
 
     - name: Run tests with coverage (.NET 5+)
       if: needs.check-tests.outputs.is_framework == 'false'
@@ -153,3 +152,12 @@ jobs:
       with:
         name: coverage-report
         path: coverage-report/
+
+    # GitHub Pages 배포
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./coverage-report
+        destination_dir: coverage
+        keep_files: false
